@@ -8,6 +8,8 @@ import { Recorder } from "./engine/message";
 import { upload2bilibili } from './uploader/caller'
 import { uploadStatus } from "./uploader/uploadStatus"
 import { deleteFolder } from './util/utils'
+import { memoryInfo } from './util/memory';
+
 log4js.configure({
     appenders: {
         cheese: {
@@ -17,12 +19,30 @@ log4js.configure({
             backups: 10,
             encoding: "utf-8",
         },
+        memory: {
+            type: "file",
+            filename: process.cwd() + "/logs/memory.log",
+            maxLogSize: 20971520,
+            backups: 10,
+            encoding: "utf-8",
+        }
     },
-    categories: { default: { appenders: ["cheese"], level: "info" } },
+    categories: {
+        cheese: {
+            appenders: ["cheese"], level: "info"
+        },
+        memory: {
+            appenders: ["memory"], level: "info"
+        },
+        default: {
+            appenders: ["cheese"], level: "info"
+        },
+    },
 });
 
 const Rooms = getRoomArrInfo(require('../templates/info.json').streamerInfo);
-const logger = log4js.getLogger("message");
+const logger = log4js.getLogger("cheese");
+const memoryLogger = log4js.getLogger("memory");
 let recorderPool: Recorder[] = []
 
 // event of stream disconnected
@@ -43,6 +63,9 @@ emitter.on('streamDiscon', (curRecorder: Recorder) => {
                     logger.info(`日期改变，上传前一天的录播文件`)
                     if (curRecorder.uploadLocalFile)
                         submit(curRecorder.dirName, curRecorder.recorderName, curRecorder.recorderLink, curRecorder.timeV, curRecorder.tags, curRecorder.tid, curRecorder.deleteLocalFile)
+                    else {
+                        logger.info(`读取用户配置，取消上传`)
+                    }
                 }
                 // so restart the recorder
                 // continue downloading
@@ -98,6 +121,8 @@ const F = () => {
                         if (curRecorder.uploadLocalFile) {
                             logger.info(`准备投稿 ${curRecorder.recorderName}`)
                             submit(curRecorder.dirName, curRecorder.recorderName, curRecorder.recorderLink, curRecorder.timeV, curRecorder.tags, curRecorder.tid, curRecorder.deleteLocalFile)
+                        } else {
+                            logger.info(`读取用户配置，取消上传`)
                         }
                         recorderPool.splice(curRecorderIndex, 1);
                     }, 5000);
@@ -138,6 +163,8 @@ const submit = (dirName: string, roomName: string, roomLink: string, timeV: stri
                 } catch (err) {
                     logger.error(`稿件 ${dirName} 删除本地文件失败：${err}`)
                 }
+            } else {
+                logger.info(`读取用户配置，取消删除本地文件`)
             }
         })
         .catch(err => {
@@ -145,3 +172,7 @@ const submit = (dirName: string, roomName: string, roomLink: string, timeV: stri
             logger.error(`稿件 ${dirName} 投稿失败：${err}`)
         })
 }
+
+setInterval(() => {
+    memoryLogger.info(`${new Date().toLocaleString()}: ${memoryInfo}`)
+}, 10000);
